@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { Check, ChevronDown } from "lucide-react"
 import { Controller, useForm } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -7,13 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { FormDrawer } from "@/components/shared/FormDrawer"
 import { CurrencyAmountInput } from "@/components/shared/CurrencyAmountInput"
 import { useCustomers } from "@/hooks/useCustomers"
@@ -55,6 +49,8 @@ export function VisitFormSheet({
   const { data: customers = [] } = useCustomers()
   const { addVisit, updateVisit } = useVisits(reportId)
   const [search, setSearch] = useState("")
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
   const isEdit = Boolean(visit)
 
   const schema = useMemo(
@@ -85,6 +81,7 @@ export function VisitFormSheet({
   useEffect(() => {
     if (!open) return
     setSearch("")
+    setPickerOpen(false)
     form.reset({
       customer_id: visit?.customer_id ?? "",
       visit_time: formatVisitTime(visit?.visit_time) ?? "",
@@ -96,6 +93,8 @@ export function VisitFormSheet({
   }, [open, visit, form])
 
   const selectedId = form.watch("customer_id")
+  const status = form.watch("status")
+  const selected = customers.find((customer) => customer.id === selectedId)
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return customers
@@ -105,6 +104,25 @@ export function VisitFormSheet({
         customer.phone_number.includes(q),
     )
   }, [customers, search])
+
+  useEffect(() => {
+    if (!pickerOpen) return
+
+    function onPointerDown(event: PointerEvent) {
+      if (!pickerRef.current?.contains(event.target as Node)) {
+        setPickerOpen(false)
+      }
+    }
+
+    document.addEventListener("pointerdown", onPointerDown)
+    return () => document.removeEventListener("pointerdown", onPointerDown)
+  }, [pickerOpen])
+
+  function pickCustomer(id: string) {
+    form.setValue("customer_id", id, { shouldValidate: true })
+    setPickerOpen(false)
+    setSearch("")
+  }
 
   async function onSubmit(values: VisitFormValues) {
     const payload = {
@@ -139,39 +157,78 @@ export function VisitFormSheet({
       title={isEdit ? t.visits.edit : t.visits.add}
     >
       <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
-        <div className="space-y-2">
+        <div className="space-y-2" ref={pickerRef}>
           <Label>{t.visits.customer}</Label>
-          <Input
-            className="h-11"
-            placeholder={t.visits.search}
-            value={search}
-            onChange={(event) => setSearch(toAsciiDigits(event.target.value))}
-          />
-          <div className="max-h-40 space-y-1 overflow-y-auto rounded-xl ring-1 ring-foreground/10">
-            {filtered.length === 0 ? (
-              <p className="px-3 py-4 text-sm text-muted-foreground">
-                {t.visits.noMatch}
-              </p>
+          <button
+            type="button"
+            aria-expanded={pickerOpen}
+            onClick={() => setPickerOpen((current) => !current)}
+            className="flex h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 text-start"
+          >
+            {selected ? (
+              <span className="min-w-0 truncate text-sm font-medium">
+                {selected.full_name}
+                <span className="ms-2 text-xs font-normal text-muted-foreground">
+                  {selected.phone_number}
+                </span>
+              </span>
             ) : (
-              filtered.map((customer) => (
-                <button
-                  key={customer.id}
-                  type="button"
-                  onClick={() => form.setValue("customer_id", customer.id, { shouldValidate: true })}
-                  className={
-                    selectedId === customer.id
-                      ? "flex min-h-11 w-full flex-col items-start px-3 py-2 text-start bg-muted"
-                      : "flex min-h-11 w-full flex-col items-start px-3 py-2 text-start"
-                  }
-                >
-                  <span className="text-sm font-medium">{customer.full_name}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {customer.phone_number}
-                  </span>
-                </button>
-              ))
+              <span className="truncate text-sm text-muted-foreground">
+                {t.visits.select}
+              </span>
             )}
-          </div>
+            <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+          </button>
+          {pickerOpen ? (
+            <div
+              className="overflow-hidden rounded-xl border border-input bg-popover shadow-md"
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setPickerOpen(false)
+              }}
+            >
+              <div className="p-2">
+                <Input
+                  autoFocus
+                  className="h-11"
+                  placeholder={t.visits.search}
+                  value={search}
+                  onChange={(event) => setSearch(toAsciiDigits(event.target.value))}
+                />
+              </div>
+              <div className="max-h-56 overflow-y-auto pb-1">
+                {filtered.length === 0 ? (
+                  <p className="px-3 py-4 text-sm text-muted-foreground">
+                    {t.visits.noMatch}
+                  </p>
+                ) : (
+                  filtered.map((customer) => (
+                    <button
+                      key={customer.id}
+                      type="button"
+                      onClick={() => pickCustomer(customer.id)}
+                      className={
+                        selectedId === customer.id
+                          ? "flex min-h-11 w-full items-center gap-2 bg-muted px-3 py-2 text-start"
+                          : "flex min-h-11 w-full items-center gap-2 px-3 py-2 text-start"
+                      }
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">
+                          {customer.full_name}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {customer.phone_number}
+                        </span>
+                      </span>
+                      {selectedId === customer.id ? (
+                        <Check className="size-4 shrink-0 text-primary" />
+                      ) : null}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : null}
           {form.formState.errors.customer_id ? (
             <p className="text-xs text-destructive">
               {form.formState.errors.customer_id.message}
@@ -220,25 +277,25 @@ export function VisitFormSheet({
         </div>
 
         <div className="space-y-2">
-          <Label>{t.visits.status}</Label>
-          <Controller
-            control={form.control}
-            name="status"
-            render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger dir="rtl" className="h-11 w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent dir="rtl">
-                  {STATUS_OPTIONS.map((option) => (
-                    <SelectItem key={option} value={option} dir="rtl">
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
+          <Label htmlFor="status">{t.visits.status}</Label>
+          <Input id="status" className="h-11" {...form.register("status")} />
+          <div className="flex flex-wrap gap-2">
+            {STATUS_OPTIONS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                dir="rtl"
+                onClick={() => form.setValue("status", option)}
+                className={
+                  status === option
+                    ? "h-8 rounded-full bg-primary px-3 text-sm text-primary-foreground"
+                    : "h-8 rounded-full bg-muted px-3 text-sm"
+                }
+              >
+                {option}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="space-y-2">

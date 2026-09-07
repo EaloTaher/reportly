@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/hooks/useAuth"
 import { toAsciiDigits } from "@/lib/digits"
+import { toAppError } from "@/lib/errors"
 import type { Customer } from "@/types/database"
 
 export type CustomerInput = {
@@ -28,16 +29,27 @@ export function useCustomers() {
   })
 
   const addCustomer = useMutation({
-    mutationFn: async (input: CustomerInput) => {
-      const { error } = await supabase.from("customers").insert({
-        user_id: user!.id,
-        full_name: input.full_name.trim(),
-        phone_number: toAsciiDigits(input.phone_number).trim(),
-        address: toAsciiDigits(input.address).trim(),
-      })
-      if (error) throw error
+    mutationFn: async (input: CustomerInput): Promise<Customer> => {
+      const { data, error } = await supabase
+        .from("customers")
+        .insert({
+          user_id: user!.id,
+          full_name: input.full_name.trim(),
+          phone_number: toAsciiDigits(input.phone_number).trim(),
+          address: toAsciiDigits(input.address).trim(),
+        })
+        .select()
+        .single()
+      if (error) throw toAppError(error)
+      return data
     },
-    onSuccess: async () => {
+    onSuccess: async (customer) => {
+      // Show the new customer right away, then reconcile with the server.
+      queryClient.setQueryData<Customer[]>(["customers", user?.id], (current) =>
+        [...(current ?? []).filter((item) => item.id !== customer.id), customer].sort(
+          (a, b) => a.full_name.localeCompare(b.full_name),
+        ),
+      )
       await queryClient.invalidateQueries({ queryKey: ["customers"] })
     },
   })
@@ -55,7 +67,7 @@ export function useCustomers() {
           address: toAsciiDigits(input.address).trim(),
         })
         .eq("id", id)
-      if (error) throw error
+      if (error) throw toAppError(error)
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["customers"] })
@@ -66,7 +78,7 @@ export function useCustomers() {
   const deleteCustomer = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("customers").delete().eq("id", id)
-      if (error) throw error
+      if (error) throw toAppError(error)
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["customers"] })

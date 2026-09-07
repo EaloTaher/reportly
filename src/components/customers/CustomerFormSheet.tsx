@@ -11,6 +11,7 @@ import { ConfirmDeleteDialog } from "@/components/shared/ConfirmDeleteDialog"
 import { useCustomers } from "@/hooks/useCustomers"
 import { useI18n } from "@/i18n/I18nProvider"
 import { toAsciiDigits } from "@/lib/digits"
+import { isUniqueViolation } from "@/lib/errors"
 import type { Customer } from "@/types/database"
 
 type CustomerFormValues = {
@@ -31,7 +32,12 @@ export function CustomerFormSheet({
   customer,
 }: CustomerFormSheetProps) {
   const { t } = useI18n()
-  const { addCustomer, updateCustomer, deleteCustomer } = useCustomers()
+  const {
+    data: customers,
+    addCustomer,
+    updateCustomer,
+    deleteCustomer,
+  } = useCustomers()
   const [confirmDelete, setConfirmDelete] = useState(false)
   const isEdit = Boolean(customer)
 
@@ -63,7 +69,19 @@ export function CustomerFormSheet({
     })
   }, [open, customer, form])
 
+  function rejectDuplicatePhone(phone: string): boolean {
+    const clash = customers?.find(
+      (item) => item.phone_number === phone && item.id !== customer?.id,
+    )
+    if (!clash) return false
+    form.setError("phone_number", { message: t.errors.phoneTaken })
+    toast.error(t.errors.phoneTaken, { description: clash.full_name })
+    return true
+  }
+
   async function onSubmit(values: CustomerFormValues) {
+    const phone = toAsciiDigits(values.phone_number).trim()
+    if (rejectDuplicatePhone(phone)) return
     try {
       if (customer) {
         await updateCustomer.mutateAsync({ id: customer.id, ...values })
@@ -74,7 +92,14 @@ export function CustomerFormSheet({
       }
       onOpenChange(false)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t.customers.saveFailed)
+      if (isUniqueViolation(error)) {
+        form.setError("phone_number", { message: t.errors.phoneTaken })
+        toast.error(t.errors.phoneTaken)
+        return
+      }
+      toast.error(t.customers.saveFailed, {
+        description: error instanceof Error ? error.message : undefined,
+      })
     }
   }
 
@@ -86,7 +111,9 @@ export function CustomerFormSheet({
       setConfirmDelete(false)
       onOpenChange(false)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t.customers.deleteFailed)
+      toast.error(t.customers.deleteFailed, {
+        description: error instanceof Error ? error.message : undefined,
+      })
     }
   }
 

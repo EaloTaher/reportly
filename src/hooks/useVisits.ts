@@ -25,6 +25,7 @@ export function useVisits(reportId: string | undefined) {
           "*, customers ( id, full_name, phone_number, address )",
         )
         .eq("report_id", reportId!)
+        .order("visit_time", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: true })
       if (error) throw error
       return (data ?? []) as VisitWithCustomer[]

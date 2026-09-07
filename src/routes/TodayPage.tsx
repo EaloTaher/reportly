@@ -94,7 +94,7 @@ export function TodayPage() {
     printDailyReport({
       header: getPrintHeader() || t.today.printHeaderDefault,
       reportDate: report.report_date,
-      preparedBy: profileQuery.data?.full_name || profileQuery.data?.email || null,
+      preparedBy: profileQuery.data?.full_name?.trim() || "",
       visits,
       currency,
       dir,
@@ -112,14 +112,16 @@ export function TodayPage() {
         title={title}
         onBack={viewingPast ? () => navigate("/") : undefined}
         action={
-          <button
-            type="button"
-            onClick={onPrint}
-            className="inline-flex h-11 min-w-16 items-center justify-center gap-1 rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground"
-          >
-            <Printer className="size-4" />
-            {t.today.print}
-          </button>
+          report ? (
+            <button
+              type="button"
+              onClick={onPrint}
+              className="inline-flex h-11 min-w-16 items-center justify-center gap-1 rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground"
+            >
+              <Printer className="size-4" />
+              {t.today.print}
+            </button>
+          ) : undefined
         }
       />
       <main className="px-4 py-4">
@@ -130,7 +132,6 @@ export function TodayPage() {
             visits={visitsQuery.data}
             totals={totals}
             currency={currency}
-            onPrint={onPrint}
             onEdit={(visit) => {
               setEditingVisit(visit)
               setVisitOpen(true)
@@ -163,14 +164,6 @@ export function TodayPage() {
                   >
                     {startToday.isPending ? t.today.starting : t.today.start}
                   </Button>
-                  <Button
-                    className="mt-3 h-11 w-full gap-2"
-                    variant="outline"
-                    onClick={onPrint}
-                  >
-                    <Printer className="size-4" />
-                    {t.today.printReport}
-                  </Button>
                 </div>
               ) : (
                 <ReportDetail
@@ -179,7 +172,6 @@ export function TodayPage() {
                   visits={visitsQuery.data}
                   totals={totals}
                   currency={currency}
-                  onPrint={onPrint}
                   onEdit={(visit) => {
                     setEditingVisit(visit)
                     setVisitOpen(true)
@@ -248,7 +240,6 @@ function ReportDetail({
   visits,
   totals,
   currency,
-  onPrint,
   onEdit,
   onDelete,
 }: {
@@ -257,7 +248,6 @@ function ReportDetail({
   visits: VisitWithCustomer[] | undefined
   totals: { taken: number; left: number }
   currency: string
-  onPrint: () => void
   onEdit: (visit: VisitWithCustomer) => void
   onDelete: (visit: VisitWithCustomer) => void
 }) {
@@ -274,10 +264,6 @@ function ReportDetail({
 
   return (
     <div className="space-y-3">
-      <Button className="h-12 w-full gap-2 text-base" onClick={onPrint}>
-        <Printer className="size-5" />
-        {t.today.printReport}
-      </Button>
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-foreground/8">
           <p className="text-xs text-muted-foreground">{t.today.taken}</p>

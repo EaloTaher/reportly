@@ -26,9 +26,23 @@ export function splitIsoDate(isoDate: string): {
   return { year, month, day }
 }
 
+/** 24-hour "HH:MM", the shape an `<input type="time">` expects. */
 export function formatVisitTime(time: string | null | undefined): string | null {
   if (!time) return null
   return time.slice(0, 5)
+}
+
+/** Readable 12-hour label with Latin digits, e.g. "10:30 AM". */
+export function formatVisitTimeLabel(
+  time: string | null | undefined,
+): string | null {
+  const value = formatVisitTime(time)
+  if (!value) return null
+  const [hourPart = "", minute = "00"] = value.split(":")
+  const hour = Number(hourPart)
+  if (!Number.isInteger(hour)) return value
+  const suffix = hour < 12 ? "AM" : "PM"
+  return `${hour % 12 || 12}:${minute} ${suffix}`
 }
 
 export function isUniqueViolation(error: { code?: string } | null): boolean {
